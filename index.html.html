@@ -510,7 +510,7 @@ $('#btnSave').onclick = async () => {
     const src = await PDFDocument.load(S.bytes, { ignoreEncryption:true });
     const out = await PDFDocument.create();
     if(S.custom) out.registerFontkit(fontkit);
-    const map = {}, fonts = {};
+    const map = {}, fonts = {}, bad = new Set();
     const STD = { sans:['Helvetica','HelveticaBold','HelveticaOblique','HelveticaBoldOblique'], serif:['TimesRoman','TimesRomanBold','TimesRomanItalic','TimesRomanBoldItalic'], mono:['Courier','CourierBold','CourierOblique','CourierBoldOblique'] };
     const getFont = async it => {
       const custom = it.fam === 'custom' && S.custom, k = custom ? 'custom' : it.fam + (it.bold?1:0) + (it.italic?1:0);
@@ -536,7 +536,7 @@ $('#btnSave').onclick = async () => {
         if(it.cover){ const c = it.cover; pg.drawRectangle({ x:X(c.x), y:Y(c.y+c.h), width:c.w, height:c.h, color:rgbOf(c.color) }); }
         const { font, unicode } = await getFont(it);
         for(const [i, raw] of it.text.split('\n').entries()){
-          const line = unicode ? raw : raw.replace(/[^\x20-\x7E\xA0-\xFF]/g, '?');
+          const line = unicode ? raw : [...raw].map(ch => { try{ font.encodeText(ch); return ch; }catch(e){ bad.add(ch); return '?'; } }).join(''); // keeps €, curly quotes, dashes etc.
           if(!line.trim()) continue;
           const w = font.widthOfTextAtSize(line, it.size);
           const x = it.align === 'center' ? it.ax - w/2 : it.align === 'right' ? it.ax - w : it.ax;
@@ -548,7 +548,7 @@ $('#btnSave').onclick = async () => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = S.name.replace(/\.pdf$/i,'') + '-edited.pdf'; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast('Edited PDF downloaded.');
+    toast(bad.size ? 'Downloaded, but these characters are not in the standard font and became ?: ' + [...bad].join(' ') + '. Load a font file (Font file button) that contains them.' : 'Edited PDF downloaded.');
   }catch(err){ console.error(err); toast('Could not save the PDF: ' + err.message); }
   btn.disabled = false;
 };
